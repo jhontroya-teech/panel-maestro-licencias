@@ -67,7 +67,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .pill.on{background:#E5F5EA;color:#1E8A3E;}
 .pill.off{background:#FCE8E8;color:#C23A3A;}
 .pdf-btn{font-size:11.5px;padding:5px 8px;display:flex;align-items:center;gap:3px;}
-.pdf-menu{display:none;position:absolute;background:#fff;border:1px solid #D7E4F0;border-radius:8px;padding:4px;min-width:170px;box-shadow:0 4px 16px rgba(0,0,0,0.12);z-index:30;}
+.pdf-menu{display:none;position:fixed;background:#fff;border:1px solid #D7E4F0;border-radius:8px;padding:4px;min-width:170px;box-shadow:0 4px 16px rgba(0,0,0,0.12);z-index:9999;}
 .pdf-menu.show{display:block;}
 .pdf-menu a{display:block;padding:7px 9px;font-size:12px;border-radius:6px;color:#1a1a1a;text-decoration:none;}
 .pdf-menu a:hover{background:#EDF3F9;}
@@ -362,6 +362,9 @@ async function togglePdfMenu(id, ev){
   const abrir = !menu.classList.contains('show');
   menu.classList.toggle('show');
   if(abrir){
+    const rect = ev.currentTarget.getBoundingClientRect();
+    menu.style.top = (rect.bottom + 4) + 'px';
+    menu.style.left = Math.max(4, rect.right - 170) + 'px';
     menu.innerHTML = '<div class="empty">Cargando...</div>';
     const lista = await obtenerComprobantes(id);
     if(lista.length === 0){
@@ -433,6 +436,9 @@ function abrirActivar(id){
   toggleFechaManual();
   limpiarFirma();
   document.getElementById('overlay-activar').classList.add('show');
+  // El canvas estaba oculto hasta este momento, así que recién ahora
+  // tiene tamaño real y podemos medirlo bien.
+  requestAnimationFrame(() => { if(window._resizeFirma) window._resizeFirma(); });
 }
 
 function toggleFechaManual(){
@@ -457,8 +463,13 @@ function iniciarFirma(){
   const canvas = document.getElementById('ac-sig');
   function resize(){
     const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * 2;
-    canvas.height = rect.height * 2;
+    if(rect.width === 0 || rect.height === 0) return; // el modal sigue oculto, no hay nada que medir todavía
+    // Si ya había un trazo dibujado, lo perderíamos al cambiar el tamaño del canvas,
+    // así que solo redimensionamos si el tamaño realmente cambió.
+    const nuevoAncho = rect.width * 2, nuevoAlto = rect.height * 2;
+    if(canvas.width === nuevoAncho && canvas.height === nuevoAlto) return;
+    canvas.width = nuevoAncho;
+    canvas.height = nuevoAlto;
     sigCtx = canvas.getContext('2d');
     sigCtx.scale(2,2);
     sigCtx.lineWidth = 2;
@@ -467,6 +478,7 @@ function iniciarFirma(){
   }
   resize();
   window.addEventListener('resize', resize);
+  window._resizeFirma = resize; // se vuelve a llamar cuando se abre el modal de activar
   function pos(e){
     const rect = canvas.getBoundingClientRect();
     const t = e.touches ? e.touches[0] : e;
