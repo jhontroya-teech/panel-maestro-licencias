@@ -67,11 +67,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .pill.on{background:#E5F5EA;color:#1E8A3E;}
 .pill.off{background:#FCE8E8;color:#C23A3A;}
 .pdf-btn{font-size:11.5px;padding:5px 8px;display:flex;align-items:center;gap:3px;}
-.pdf-menu{display:none;position:fixed;background:#fff;border:1px solid #D7E4F0;border-radius:8px;padding:4px;min-width:170px;box-shadow:0 4px 16px rgba(0,0,0,0.12);z-index:9999;}
-.pdf-menu.show{display:block;}
-.pdf-menu a{display:block;padding:7px 9px;font-size:12px;border-radius:6px;color:#1a1a1a;text-decoration:none;}
-.pdf-menu a:hover{background:#EDF3F9;}
-.pdf-menu .empty{color:#aaa;padding:7px 9px;font-size:12px;}
 .act-btn{font-size:11.5px;padding:6px 9px;}
 
 .fab{position:fixed;bottom:1.5rem;right:1.5rem;width:56px;height:56px;border-radius:50%;background:#3D6D99;color:#fff;border:none;font-size:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(61,109,153,0.4);z-index:40;}
@@ -191,9 +186,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <label>Foto de la transferencia (opcional)</label>
     <input id="ac-foto" type="file" accept="image/*" onchange="previewFoto(event)">
     <img id="ac-foto-preview" class="photo-preview">
+    <div id="ac-pdf-resultado" style="display:none;margin-top:14px;padding:12px;background:#EDF3F9;border-radius:8px;text-align:center;">
+      <div style="font-size:13px;color:#1F4E79;font-weight:600;margin-bottom:8px;">✅ Comprobante generado</div>
+      <a id="ac-pdf-link" href="#" target="_blank" class="btn btn-primary" style="text-decoration:none;display:inline-flex;">
+        <i class="ti ti-file-type-pdf"></i> Ver / descargar PDF
+      </a>
+    </div>
     <div class="modal-actions">
-      <button class="btn-secondary" onclick="cerrarModal('overlay-activar')">Cancelar</button>
-      <button class="btn-primary" onclick="confirmarActivar()">Activar</button>
+      <button class="btn-secondary" onclick="cerrarModal('overlay-activar')" id="ac-btn-cancelar">Cancelar</button>
+      <button class="btn-primary" onclick="confirmarActivar()" id="ac-btn-activar">Activar</button>
     </div>
   </div>
 </div>
@@ -333,8 +334,7 @@ function renderTabla(){
       <div>${c.fechaVencimiento||'-'}</div>
       <div>${c.notas && c.notas.indexOf('$')===0 ? c.notas : ''}</div>
       <div style="position:relative;">
-        <button class="btn pdf-btn" onclick="togglePdfMenu('${c.id}', event)"><i class="ti ti-file-type-pdf"></i> <i class="ti ti-chevron-down"></i></button>
-        <div class="pdf-menu" id="pdf-menu-${c.id}"></div>
+        <button class="btn pdf-btn" onclick="verPdfCliente('${c.id}')"><i class="ti ti-file-type-pdf"></i> PDF</button>
       </div>
       <div><span class="pill ${estado==='on'?'on':'off'}">${pillTxt}</span></div>
       <div style="text-align:right;display:flex;gap:6px;justify-content:flex-end;">
@@ -345,28 +345,17 @@ function renderTabla(){
   }).join('');
 }
 
-async function togglePdfMenu(id, ev){
-  ev.stopPropagation();
-  document.querySelectorAll('.pdf-menu').forEach(m => { if(m.id !== 'pdf-menu-'+id) m.classList.remove('show'); });
-  const menu = document.getElementById('pdf-menu-'+id);
-  const abrir = !menu.classList.contains('show');
-  menu.classList.toggle('show');
-  if(abrir){
-    const rect = ev.currentTarget.getBoundingClientRect();
-    menu.style.top = (rect.bottom + 4) + 'px';
-    menu.style.left = Math.max(4, rect.right - 170) + 'px';
-    menu.innerHTML = '<div class="empty">Cargando...</div>';
-    const lista = await obtenerComprobantes(id);
-    if(lista.length === 0){
-      menu.innerHTML = '<div class="empty">Sin comprobantes aún</div>';
-    } else {
-      menu.innerHTML = lista.map((c,i) =>
-        `<a href="${c.url}" target="_blank">Activación ${lista.length - i} · ${c.fecha}</a>`
-      ).join('');
-    }
+async function verPdfCliente(id){
+  showToast('🔎 Buscando comprobante...');
+  const lista = await obtenerComprobantes(id);
+  if(lista.length === 0){
+    showToast('⚠️ Este cliente aún no tiene ningún comprobante generado');
+    return;
   }
+  // La lista viene ordenada del más reciente al más viejo (ver
+  // listarComprobantes en el backend), así que el [0] es el último.
+  window.open(lista[0].url, '_blank');
 }
-document.addEventListener('click', () => document.querySelectorAll('.pdf-menu').forEach(m => m.classList.remove('show')));
 
 async function obtenerComprobantes(id){
   if(comprobantesCache[id]) return comprobantesCache[id];
@@ -424,6 +413,8 @@ function abrirActivar(id){
   document.getElementById('ac-valor').value = '';
   document.getElementById('ac-meses').value = '3';
   toggleFechaManual();
+  document.getElementById('ac-pdf-resultado').style.display = 'none';
+  document.getElementById('ac-btn-cancelar').textContent = 'Cancelar';
   document.getElementById('overlay-activar').classList.add('show');
 }
 
@@ -465,14 +456,25 @@ async function confirmarActivar(){
   params.append('pass', sesion.pass);
 
   showToast('⏳ Generando comprobante...');
+  document.getElementById('ac-btn-activar').disabled = true;
   const resp = await fetch(MASTER_URL, { method:'POST', body: params }).then(r=>r.json());
+  document.getElementById('ac-btn-activar').disabled = false;
   if(resp.ok){
-    // resp.msg trae un aviso cuando la activación funcionó pero el PDF
-    // falló; antes ese mensaje se ignoraba y parecía que todo había ido bien.
-    showToast(resp.msg ? '⚠️ ' + resp.msg : '✅ Cliente activado');
-    cerrarModal('overlay-activar');
     delete comprobantesCache[clienteActivarId];
     cargarTodo();
+    if(resp.urlPDF){
+      // Dejamos el modal abierto con el link listo para abrir/descargar,
+      // en vez de cerrarlo de inmediato — así no hay que ir a buscarlo.
+      showToast('✅ Cliente activado');
+      document.getElementById('ac-pdf-link').href = resp.urlPDF;
+      document.getElementById('ac-pdf-resultado').style.display = 'block';
+      document.getElementById('ac-btn-cancelar').textContent = 'Cerrar';
+    } else {
+      // resp.msg trae un aviso cuando la activación funcionó pero el PDF
+      // falló; antes ese mensaje se ignoraba y parecía que todo había ido bien.
+      showToast(resp.msg ? '⚠️ ' + resp.msg : '✅ Cliente activado');
+      cerrarModal('overlay-activar');
+    }
   } else {
     showToast('⚠️ ' + (resp.msg || 'No se pudo activar'));
   }
