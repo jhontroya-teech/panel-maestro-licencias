@@ -169,6 +169,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 </div>
 
+<div class="overlay" id="overlay-editar">
+  <div class="modal">
+    <h3>Editar cliente</h3>
+    <label>Código único</label>
+    <input id="ed-id" disabled style="opacity:.6">
+    <label>Sistema</label>
+    <input id="ed-sistema" placeholder="Ej. Iglu Servicio Integral">
+    <label>Negocio / cliente</label>
+    <input id="ed-negocio" placeholder="Nombre del negocio">
+    <label>Contacto</label>
+    <input id="ed-contacto" placeholder="Teléfono o correo">
+    <label>URL del sistema (/exec del Apps Script de ese negocio)</label>
+    <input id="ed-urlsistema" placeholder="https://script.google.com/macros/s/.../exec">
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="cerrarModal('overlay-editar')">Cancelar</button>
+      <button class="btn-primary" onclick="guardarEditarCliente()">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="overlay-activar">
   <div class="modal">
     <h3>Activar cliente</h3>
@@ -340,6 +360,7 @@ function renderTabla(){
       </div>
       <div><span class="pill ${estado==='on'?'on':'off'}">${pillTxt}</span></div>
       <div style="text-align:right;display:flex;gap:6px;justify-content:flex-end;">
+        <button class="btn" aria-label="Editar cliente" onclick="abrirEditar('${c.id}')"><i class="ti ti-pencil"></i></button>
         <button class="btn act-btn" onclick="abrirActivar('${c.id}')">Activar</button>
         <button class="btn act-btn" onclick="desactivarCliente('${c.id}')">Desactivar</button>
       </div>
@@ -383,6 +404,38 @@ function abrirNuevoCliente(){
   document.getElementById('overlay-nuevo').classList.add('show');
 }
 function cerrarModal(id){ document.getElementById(id).classList.remove('show'); }
+
+function abrirEditar(id){
+  const c = clientes.find(x => String(x.id) === String(id));
+  if(!c){ showToast('⚠️ No se encontró ese cliente'); return; }
+  document.getElementById('ed-id').value = c.id;
+  document.getElementById('ed-sistema').value = c.sistema || '';
+  document.getElementById('ed-negocio').value = c.negocio || '';
+  document.getElementById('ed-contacto').value = c.contacto || '';
+  document.getElementById('ed-urlsistema').value = c.urlSistema || '';
+  document.getElementById('overlay-editar').classList.add('show');
+}
+
+async function guardarEditarCliente(){
+  const id = document.getElementById('ed-id').value.trim();
+  const params = new URLSearchParams();
+  params.append('type', 'editarCliente');
+  params.append('id', id);
+  params.append('sistema', document.getElementById('ed-sistema').value.trim());
+  params.append('negocio', document.getElementById('ed-negocio').value.trim());
+  params.append('contacto', document.getElementById('ed-contacto').value.trim());
+  params.append('urlSistema', document.getElementById('ed-urlsistema').value.trim());
+  params.append('user', sesion.user);
+  params.append('pass', sesion.pass);
+  const resp = await fetch(MASTER_URL, { method:'POST', body: params }).then(r=>r.json());
+  if(resp.ok){
+    showToast('✅ Cambios guardados');
+    cerrarModal('overlay-editar');
+    cargarTodo();
+  } else {
+    showToast('⚠️ ' + (resp.msg || 'No se pudo guardar'));
+  }
+}
 
 async function guardarNuevoCliente(){
   const id = document.getElementById('nc-id').value.trim();
