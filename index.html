@@ -160,6 +160,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <input id="nc-negocio" placeholder="Nombre del negocio">
     <label>Contacto</label>
     <input id="nc-contacto" placeholder="Teléfono o correo">
+    <label>URL del sistema (/exec del Apps Script de ese negocio)</label>
+    <input id="nc-urlsistema" placeholder="https://script.google.com/macros/s/.../exec">
     <div class="modal-actions">
       <button class="btn-secondary" onclick="cerrarModal('overlay-nuevo')">Cancelar</button>
       <button class="btn-primary" onclick="guardarNuevoCliente()">Guardar</button>
@@ -377,6 +379,7 @@ function abrirNuevoCliente(){
   document.getElementById('nc-sistema').value = '';
   document.getElementById('nc-negocio').value = '';
   document.getElementById('nc-contacto').value = '';
+  document.getElementById('nc-urlsistema').value = '';
   document.getElementById('overlay-nuevo').classList.add('show');
 }
 function cerrarModal(id){ document.getElementById(id).classList.remove('show'); }
@@ -386,6 +389,7 @@ async function guardarNuevoCliente(){
   const sistema = document.getElementById('nc-sistema').value.trim();
   const negocio = document.getElementById('nc-negocio').value.trim();
   const contacto = document.getElementById('nc-contacto').value.trim();
+  const urlSistema = document.getElementById('nc-urlsistema').value.trim();
   if(!id || !negocio){ showToast('⚠️ Escribe al menos el código y el negocio'); return; }
   const params = new URLSearchParams();
   params.append('type', 'crearCliente');
@@ -393,6 +397,7 @@ async function guardarNuevoCliente(){
   params.append('sistema', sistema);
   params.append('negocio', negocio);
   params.append('contacto', contacto);
+  params.append('urlSistema', urlSistema);
   params.append('user', sesion.user);
   params.append('pass', sesion.pass);
   const resp = await fetch(MASTER_URL, { method:'POST', body: params }).then(r=>r.json());
